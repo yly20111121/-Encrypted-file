@@ -1,5 +1,5 @@
 # SAES-GCM 加密引擎 (Core Vault Edition)
-## 警告！！！本软件自2.0.1被安全软件识别为勒索病毒，请添加白名单或直接运行py程序
+## 警告！！！本软件自2.0.1被安全软件识别为病毒，请添加白名单（或关闭安全软件）或直接运行py程序
 ## 不同大版本的不通用!!!因为文件头不一样（大版本）
 ![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)
 ![PySide6](https://img.shields.io/badge/PySide6-GUI-green.svg)
