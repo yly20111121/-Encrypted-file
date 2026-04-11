@@ -41,3 +41,12 @@ pip install PySide6 cryptography
 
 # 4. 点火启动
 py default.py
+```
+💡 CLI 与系统融合
+本工具支持通过 sys.argv 传递绝对路径。你可以轻易地将其与 Windows 右键菜单或 SendTo 目录集成，实现一键批量加密。
+
+⚠️ 安全声明
+本工具遵循严格的密码学最佳实践。但请注意：密钥遗失即意味着数据永久性损毁。没有任何后门或恢复机制可以拯救忘记密码的数据。请妥善保管您的安全凭据。
+
+📄 License
+本项目采用 MIT License 开源协议。
