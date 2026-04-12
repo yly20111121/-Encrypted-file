@@ -41,7 +41,7 @@ py -m venv venv
 pip install PySide6 cryptography
 
 # 4. 点火启动
-py default.py
+py 2.0.1.py
 ```
 💡 CLI 与系统融合
 本工具支持通过 sys.argv 传递绝对路径。你可以轻易地将其与 Windows 右键菜单或 SendTo 目录集成，实现一键批量加密。
