@@ -43,6 +43,8 @@ pip install PySide6 cryptography
 # 4. 点火启动
 py 2.0.2.py
 ```
+### 方案 B：下载https://github.com/yly20111121/-Encrypted-file/releases 的dist.zip文件
+#### dist.zip只限1.0.1有，2.0.1及以上因为打包后被识别为病毒，所以不再提供，请见谅
 💡 CLI 与系统融合
 本工具支持通过 sys.argv 传递绝对路径。你可以轻易地将其与 Windows 右键菜单或 SendTo 目录集成，实现一键批量加密。
 
