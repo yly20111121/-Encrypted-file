@@ -1,55 +1,70 @@
 # SAES-GCM 加密引擎 (Core Vault Edition)
-## 警告！！！本软件自2.0.1被安全软件识别为病毒，请添加白名单（或关闭安全软件）或直接运行py程序
-## 不同大版本的不通用!!!因为文件头不一样（大版本）
-![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)
-![PySide6](https://img.shields.io/badge/PySide6-GUI-green.svg)
-![License](https://img.shields.io/badge/License-MIT-purple.svg)
 
-SAES-GCM 是一个专为 Windows 桌面环境打造的**高强度、流式文件加解密工具**。
+## ⚠️ 风险预警
+* **安全拦截**：由于本工具涉及底层二进制流操作与文件改写，打包版本（exe）极易被 Windows Defender 或 360 识别为“启发式病毒”。请**添加白名单**，或推荐直接通过 **Python 源码运行**以获得最高安全性。
+* **版本兼容性**：**不同大版本协议不通用**。本引擎（v3.0.1）采用动态协议识别，能够向上兼容解密 V0、V1 及 V2 格式，但加密时默认采用最新的 V3 安全标准。
 
-它摒弃了传统加密工具臃肿的设定，主打“即用即走”的极客体验。底层采用 `AES-GCM` 认证加密，结合抗 ASIC 的 `Scrypt` 密钥派生算法与**内存级凭据保险箱**，在保证极高物理安全性的同时，提供丝滑的批量文件处理工作流。
+![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)
+![PySide6](https://img.shields.io/badge/PySide6-6.4+-green.svg)
+![Cryptography](https://img.shields.io/badge/Cryptography-41.0+-orange.svg)
 
-## ✨ 核心特性 (Core Features)
+SAES-GCM 3.0 是一款专为 Windows 环境设计的**高强度、零信任架构**文件加密工具。它不仅提供 AES-GCM 级别的数学安全性，更针对操作系统层面的侧信道攻击、内存提取和文件残留进行了深度加固。
 
-* **🛡️ 军工级密码学防线**
-  * **流式 AES-GCM (256-bit)**：采用 4MB 区块流式处理，防范超大文件引发的 OOM (内存溢出) 攻击。
-  * **高强度 KDF**：使用 `Scrypt (n=2**17, r=8, p=1)` 派生密钥，单次派生消耗约 128MB 内存，极大提升暴力破解和 GPU 跑字典的成本。
-  * **AAD 协议绑定**：文件头（Magic Number + Salt + Nonce）作为附加身份验证数据（AAD）绑定，任何对文件头的位翻转篡改将在解密第一步被瞬间拦截。
-* **🧠 零信任内存保险箱 (Credential Vault)**
-  * 密码不在 GUI 控件或 Python `str` 常量池中驻留。注入后瞬间转入底层的可变 `bytearray`。
-  * **15 分钟 TTL**：凭据缓存在 15 分钟无操作后，底层守护进程将主动触发**物理覆写 (`\x00`)** 并销毁，防御 RAM Dump 提取。
-* **⚡ 生产力级批处理流水线**
-  * 支持**多文件/多层级目录**拖拽，自动展平文件树压入队列。
-  * 深度融合 Windows CLI：支持通过 `sys.argv` 唤醒，完美集成 Windows 右键 `SendTo (发送到)` 菜单，一键处理海量文件。
-* **🛠️ 极端场景健壮性**
-  * **并发阻断**：提供“紧急制动 (Abort)”功能，通过协程状态机安全切断 I/O 流，杜绝文件句柄泄漏。
-  * **防系统锁死**：内置指数退避重试算法，对抗 Windows Defender 在解密落盘瞬间的恶意抢占锁死。
+---
 
-## 🚀 快速上手 (Quick Start)
+## ✨ 3.0.1 版本核心进化 (What's New)
 
-### 方案 A：直接运行 (开发者模式)
-```bash
-# 1. 克隆仓库
-git clone [https://github.com/yly20111121/-Encrypted-file.git](https://github.com/yly20111121/-Encrypted-file.git)
-cd -Encrypted-file
+### 🛡️ 协议层：V3 安全架构
+* **Scrypt 指数级增强**：加密默认采用 `N=2^17` 参数，单次派生强制占用约 128MB 内存，彻底封杀硬件加速破解的可能性。
+* **多版本回溯解密**：内置协议自动探测引擎，支持 V0.0.1 (PBKDF2)、V1.0.1 (Scrypt N=14) 及 V2.0.2 历史文件的无缝解密。
+* **全元数据加密**：文件名、原始文件大小等敏感信息全部压入加密 Meta 块中，外部无法通过 `.enc` 文件得知原始文件性质。
 
-# 2. 创建并激活虚拟环境
-py -m venv venv
-.\venv\Scripts\activate
+### 🧠 零信任内存保险箱 (Credential Vault)
+* **物理覆写注销**：凭据不仅在 TTL 到期后失效，还会触发底层 `bytearray` 的物理覆盖（`\x00`），防止内存镜像中的密钥残留。
+* **安全熔断机制**：在批量任务中，一旦发生凭据校验失败（InvalidTag），系统将立即触发“流水线熔断”，停止后续所有任务。
 
-# 3. 安装核心依赖
-pip install PySide6 cryptography
+### 🛠️ 工业级 I/O 处理
+* **长路径突破**：全面适配 Windows `\\?\` 长路径协议，支持超过 255 字符的深度目录访问。
+* **文件粉碎 (Shred)**：提供“头尾覆盖”粉碎模式，在删除原文件前对物理扇区进行强制覆写。
+* **智能过滤引擎**：自动识别已加密/未加密状态，防止“二次加密”导致的逻辑混乱。
 
-# 4. 点火启动
-py 2.0.2.py
-```
-### 方案 B：下载https://github.com/yly20111121/-Encrypted-file/releases 的dist.zip文件
-#### dist.zip只限1.0.1有，2.0.1及以上因为打包后被识别为病毒，所以不再提供，请见谅
-💡 CLI 与系统融合
-本工具支持通过 sys.argv 传递绝对路径。你可以轻易地将其与 Windows 右键菜单或 SendTo 目录集成，实现一键批量加密。
+---
 
-⚠️ 安全声明
-本工具遵循严格的密码学最佳实践。但请注意：密钥遗失即意味着数据永久性损毁。没有任何后门或恢复机制可以拯救忘记密码的数据。请妥善保管您的安全凭据。
+## 🚀 部署指南
 
-📄 License
-本项目采用 MIT License 开源协议。
+### 推荐方案：源码运行
+1.  **环境准备**：
+    ```bash
+    git clone [https://github.com/yly20111121/-Encrypted-file.git](https://github.com/yly20111121/-Encrypted-file.git)
+    cd -Encrypted-file
+    pip install PySide6 cryptography
+    ```
+2.  **点火启动**：
+    ```bash
+    python "文件加密3.0.1.py"
+    ```
+
+### 集成到 Windows 右键菜单
+将脚本或打包后的 exe 创建快捷方式，放入 `shell:sendto` 文件夹中。之后只需在文件上右键选择“发送到”，即可瞬间装载任务队列。
+
+---
+
+## ⚙️ 技术规格 (Technical Specs)
+
+| 维度 | 技术实现 |
+| :--- | :--- |
+| **对称加密** | AES-256-GCM (Authenticated Encryption) |
+| **密钥派生 (KDF)** | Scrypt (N=131072, r=8, p=1) |
+| **分块大小** | 4MB 流式区块 (防 OOM 攻击) |
+| **冲突策略** | 询问 / 自动重命名 / 跳过 / 覆盖 |
+| **身份验证** | AAD 绑定文件头（Magic + Salt + Nonce） |
+| **删除算法** | 同步覆写 + fsync 强制落盘 |
+
+---
+
+## ⚠️ 重要声明
+1.  **无后门设计**：本工具不设任何恢复机制。若密码丢失，没有任何手段可以找回数据。
+2.  **残留清理**：程序启动时会自动检测上次运行残留的 `.tmp` 文件并提示清理，请务必关注。
+3.  **开发者建议**：在大规模处理前，请先在少量样本上测试密码一致性。
+
+**License**: [MIT License](https://opensource.org/licenses/MIT)
