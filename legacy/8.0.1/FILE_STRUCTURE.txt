@@ -1,0 +1,156 @@
+================================================================================
+                    Core Vault 8.0.1 文件工程结构与架构白皮书
+================================================================================
+
+一、 目录树视图 (Directory Tree)
+--------------------------------------------------------------------------------
+d:\jiami\8.0.1\
+│
+├── main.py                     # [主入口] 标准启动脚本，初始化 QApplication 与主窗口
+├── 8.0.1.py                    # [兼容入口] 便捷脚本，直接重定向调用 main.py
+├── FILE_STRUCTURE.txt          # [架构文档] 本文件，记录工程架构、模块职责与调用规范
+├── saes_settings.json          # [配置数据] 用户首选项、UI 主题透明度与并发线程数持久化文件
+├── crypto_operation.log        # [运行日志] 轮转加密操作日志 (自动按 10MB 分卷)
+│
+├── core/                       # 【底层核心层】密码学算子、物理内存锁、任务并发与工具库
+│   ├── __init__.py             # 核心包初始化声明
+│   ├── config.py               # 常量定义、文件协议魔数、I/O 缓冲区大小、系统日志初始化
+│   ├── memory.py               # Windows 物理内存加锁盾 (MemoryShield) 与安全内存覆写 (zero_bytes)
+│   ├── utils.py                # 长路径转换、原子文件替换、BLAKE2b 摘要、精准错误诊断
+│   ├── settings.py             # ConfigManager 配置管理类，提供首选项读写与校验
+│   ├── vault.py                # CredentialVault 物理内存加锁凭据保险库 (单例 global_vault)
+│   └── worker.py               # 多线程并发加解密流水线 (CryptoWorker)、文件扫描与哈希线程
+│
+└── ui/                         # 【界面交互层】WinUI 亚克力组件、弹窗与主视窗
+    ├── __init__.py             # 界面包初始化声明
+    ├── styles.py               # ThemeManager 现代深色 WinUI QSS 样式表与调色板定义
+    ├── components.py           # 自定义控件：VectorTitleButton(矢量标题按钮)、CustomSwitchRow、DropArea
+    ├── dialogs.py              # 交互弹窗：V0FilenameDialog、SafePasswordInputDialog、二次核对对话框
+    └── main_window.py          # MainWindow 主窗口类、多页面布局、拖拽路由、控制台事件绑定
+
+================================================================================
+二、 各模块职责与代码要素明细 (Modules Specification)
+================================================================================
+
+1. core/config.py
+   - 作用：全局静态配置与运行环境基准。
+   - 关键常量：
+     * CHUNK_SIZE = 4MB：流式加解密的基础分块单位。
+     * IO_BUFFER_SIZE = 8MB：底层文件 I/O 的双倍缓存区，消弭大文件磁盘卡顿。
+     * 协议魔数：
+       - MAGIC_CHACHA_V1 = b"SACH\x01"：ChaCha20-Poly1305 高速流加密头。
+       - MAGIC_V4 = b"SAES\x05"：现代 AES-256-GCM 主流认证加密头。
+       - MAGIC_SFK_V1, MAGIC_ECC_V1, MAGIC_V3, MAGIC_V2, MAGIC_V1：兼容历史协议。
+     * WIN_RESERVED_NAMES：防御 Windows 特殊保留文件名注入（CON, PRN, AUX, NUL...）。
+     * logger, LOG_PATH：带自动轮转的日志引擎。
+
+2. core/memory.py
+   - 作用：最高级别防内存提取与取证保护。
+   - 核心类 / 函数：
+     * MemoryShield：
+       - init()：动态加载 Windows kernel32.dll 的 VirtualAlloc / VirtualLock / VirtualUnlock / VirtualFree。
+       - alloc_locked(size)：在物理 RAM 中锁定页，禁止操作系统交换至 pagefile.sys 虚拟内存文件。
+       - free_locked(addr, size)：先 memset 清零，再解除锁定并释放。
+     * zero_bytes(*bufs)：
+       - 深度覆写敏感字节，支持 bytearray、memoryview 以及 CPython 底层 PyVarObject 字节对象，杜绝口令驻留。
+
+3. core/utils.py
+   - 作用：系统级底层 I/O 与可靠性防御工具函数。
+   - 核心函数：
+     * format_crypto_error(e)：将底层的 InvalidTag, WinError 112(磁盘已满), WinError 206(长路径) 等映射为清晰中文提示。
+     * get_safe_win_path(path)：自动补齐 Windows `\\?\` 前缀，突破 260 字符路径限制。
+     * force_replace(src, dst)：带重试机制与只读属性覆写的安全文件原子覆盖替换。
+     * compute_file_blake2b(path)：高效大文件 BLAKE2b 快速校验指纹提取。
+     * read_exact(f, n)：精准保障流式读取完整字节数，防截断反注入。
+
+4. core/settings.py
+   - 作用：用户配置的持久化存储与校验。
+   - 核心类：
+     * ConfigManager：提供 load() 与 save() 方法，管理粉碎开关、V0兼容、并发线程数、背景图及亚克力透明度。
+
+5. core/vault.py
+   - 作用：主密码凭据在内存中的安全生命周期管理。
+   - 核心类：
+     * CredentialVault：与 MemoryShield 深度联动，具备独立互斥锁（threading.Lock）、超时自动销毁（TTL）、心跳延长、按需深拷贝保护机制。
+     * 全局单例：global_vault，并注册 atexit 钩子确保进程异常退出时立即物理清零。
+
+6. core/worker.py
+   - 作用：核心密码计算引擎与多线程异步消费流水线。
+   - 核心类：
+     * CryptoWorker(QThread)：
+       - 任务调度：采用生产者-消费者模型（queue.Queue），可并发运行 max_workers 个内部工作线程。
+       - 算法支持：AES-256-GCM、ChaCha20-Poly1305、ECC(X25519) 密钥协商、SFK 文件锁。
+       - 线程安全：弹窗排队锁 (_dialog_lock)、密钥缓存锁 (_cache_lock)、局部进度闭包容器。
+     * FileScannerWorker(QThread)：异步递归扫描目录中的加密/明文文件，分批（Batch）向 UI 派发，防主界面卡死。
+     * KeyfileHasherWorker(QThread)：后台异步计算物理密钥文件摘要。
+
+7. ui/styles.py
+   - 作用：现代深色微光感 WinUI QSS 样式表与动画颜色。
+   - 核心类：
+     * ThemeManager：包含侧边栏毛玻璃、按钮悬停、进度条渐变发光等完整样式规范。
+
+8. ui/components.py
+   - 作用：现代化定制视觉控件。
+   - 核心类：
+     * VectorTitleButton：纯 QPainter 矢量绘制的最小化、最大化、关闭按钮（带悬浮高亮变色）。
+     * CustomSwitch & CustomSwitchRow：iOS/WinUI 风格的双态平滑胶囊切换开关。
+     * DropArea：支持拖拽高亮的文件吸附区域。
+
+9. ui/dialogs.py
+   - 作用：弹窗交互与二次核对安全对话框。
+   - 核心类：
+     * SafePasswordInputDialog：密码安全输入框，获取后立即擦除控件内存。
+     * SinglePasswordConfirmDialog：粉碎危险操作二次口令校验。
+     * PasswordVerifyDialog：批处理密码重复输入核对。
+     * V0FilenameDialog：针对老旧协议文件的手工溯源命名引导。
+
+10. ui/main_window.py
+    - 作用：应用程序中枢视窗，协调事件流与状态机。
+    - 核心类：
+      * MainWindow(QMainWindow)：
+        - 无边框拖拽移动、阴影效果、圆角裁切。
+        - 侧边栏导航路由切换（加解密主控制台、历史任务日志、偏好设置）。
+        - 挂载 MemoryShield 物理内存锁盾状态实时徽标。
+        - 并发线程数下拉选择器（1~16 线程调度联动）。
+
+================================================================================
+三、 核心数据流向与调用时序 (Data & Invocation Flow)
+================================================================================
+
+[用户拖拽/选择文件] 
+       │
+       ▼
+[FileScannerWorker (后台扫描)] ───(batch_found_sig)───► [MainWindow 文件列表刷新]
+       │
+[点击“开始执行” / 验证凭据]
+       │
+       ▼
+[CredentialVault (调用 MemoryShield.alloc_locked 物理锁存口令)]
+       │
+       ▼
+[CryptoWorker 启动] 
+   ├── 主线程分发任务至 task_q (queue.Queue)
+   ├── 启动 N 个工作线程并发消费
+   │      ├── 读取 8MB 缓存
+   │      ├── Scrypt + HKDF 派生
+   │      ├── ChaCha20 / AES-GCM 4MB 分块流加解密
+   │      └── 互斥上锁写入磁盘
+   ├── 节流发送进度信号 (progress_sig / file_done_sig)
+   └── 遇同名文件通过 _dialog_lock 排队向 UI 触发 (ask_overwrite_sig)
+       │
+       ▼
+[MainWindow 接收信号，无损刷新全局进度条与卡片状态]
+       │
+[执行结束 / 凭据超时] ──► [CredentialVault.lock() 触发 memset 全零擦除与 VirtualFree]
+
+================================================================================
+四、 后续版本扩展维护建议 (Extension Guidelines)
+================================================================================
+1. 新增加密算法（如 9.0.1 计划中的压缩加解密一体化）：
+   - 在 core/config.py 中定义协议新魔数（如 MAGIC_ZSTD_V1）；
+   - 在 core/worker.py 中继承或新增 _enc_xxx / _dec_xxx 核心逻辑；
+   - 仅需在 ui/main_window.py 下拉框中注册选项，其他模块无需做侵入式修改。
+2. 移植新 UI 主题（如日光白或 Mica 物理亚克力）：
+   - 在 ui/styles.py 中扩充主题 QSS；
+   - 在 ui/main_window.py 的 paintEvent 或窗口属性中挂载 DWM API 即可。
+================================================================================

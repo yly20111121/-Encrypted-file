@@ -1,0 +1,39 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+downloads/
+*.egg-info/
+*.egg
+*.exe
+
+# Virtual Environments
+.venv/
+env/
+venv/
+ENV/
+
+# User runtime settings and operational logs
+crypto_operation.log
+saes_settings.json
+*.saes_checkpoint
+*.tmp
+
+# Security & Sensitive Keys (Do NOT commit keys to version control)
+*.key
+*.pem
+master_private.key
+master_public.key
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
